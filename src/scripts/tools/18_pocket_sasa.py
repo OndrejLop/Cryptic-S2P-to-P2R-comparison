@@ -283,33 +283,37 @@ def write_summary(df: pd.DataFrame, metrics: list[tuple[str, str]], path: Path) 
 
 def plot_distributions(df: pd.DataFrame, column: str, axis_label: str,
                        title: str, path: Path):
-    fig, ax = plt.subplots(figsize=(8, 5))
     all_vals = df[column].dropna().to_numpy()
     if len(all_vals) == 0:
-        plt.close(fig)
         return
-    upper = float(pd.Series(all_vals).quantile(0.99))
-    bins = [b for b in [i * upper / 40 for i in range(41)] if b > 0] or 40
+    upper_99 = float(pd.Series(all_vals).quantile(0.99))
+    upper_full = float(np.nanmax(all_vals))
 
-    for cat in CATEGORIES:
-        sub = df.loc[df['category'] == cat, column].dropna().to_numpy()
-        if len(sub) < 2:
-            continue
-        color = CATEGORY_COLORS[cat]
-        label = f"{CATEGORY_LABELS[cat]} (n={len(sub)})"
-        ax.hist(sub, bins=bins, density=True, histtype='stepfilled',
-                color=color, alpha=0.30, label=label)
-        ax.hist(sub, bins=bins, density=True, histtype='step',
-                color=color, linewidth=1.5)
+    def _draw(upper, suffix):
+        bins = [b for b in [i * upper / 40 for i in range(41)] if b > 0] or 40
+        fig, ax = plt.subplots(figsize=(8, 5))
+        for cat in CATEGORIES:
+            sub = df.loc[df['category'] == cat, column].dropna().to_numpy()
+            if len(sub) < 2:
+                continue
+            color = CATEGORY_COLORS[cat]
+            label = f"{CATEGORY_LABELS[cat]} (n={len(sub)})"
+            ax.hist(sub, bins=bins, density=True, histtype='stepfilled',
+                    color=color, alpha=0.30, label=label)
+            ax.hist(sub, bins=bins, density=True, histtype='step',
+                    color=color, linewidth=1.5)
+        ax.set_xlabel(axis_label)
+        ax.set_ylabel('density')
+        ax.set_xlim(0, upper if upper > 0 else None)
+        ax.legend(fontsize=9)
+        fig.suptitle(title + suffix)
+        fig.tight_layout()
+        out = path.with_stem(path.stem + suffix) if suffix else path
+        _savefig(fig, out)
+        plt.close(fig)
 
-    ax.set_xlabel(axis_label)
-    ax.set_ylabel('density')
-    ax.set_xlim(0, upper if upper > 0 else None)
-    ax.legend(fontsize=9)
-    fig.suptitle(title)
-    fig.tight_layout()
-    _savefig(fig, path)
-    plt.close(fig)
+    _draw(upper_99,   "")        # trimmed at p99
+    _draw(upper_full, "_full")   # full range
 
 
 def plot_violin(df: pd.DataFrame, column: str, axis_label: str,
